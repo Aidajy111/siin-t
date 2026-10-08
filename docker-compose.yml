@@ -1,0 +1,66 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
+    environment:
+      HTTP_ADDR: ":8080"
+      HTTP_SHUTDOWN_TIMEOUT: ${HTTP_SHUTDOWN_TIMEOUT:-10s}
+      BASE_URL: ${BASE_URL:-http://localhost:8080}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-siin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Create .env from .env.example}
+      POSTGRES_DB: ${POSTGRES_DB:-siin}
+      POSTGRES_SSLMODE: disable
+      POSTGRES_CONNECT_TIMEOUT: ${POSTGRES_CONNECT_TIMEOUT:-5s}
+      POSTGRES_MAX_CONNS: ${POSTGRES_MAX_CONNS:-10}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    stop_grace_period: ${STOP_GRACE_PERIOD:-15s}
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-siin}
+      POSTGRES_USER: ${POSTGRES_USER:-siin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Create .env from .env.example}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  migrate:
+    image: migrate/migrate:v4.18.3
+    environment:
+      PGUSER: ${POSTGRES_USER:-siin}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Create .env from .env.example}
+      PGDATABASE: ${POSTGRES_DB:-siin}
+    volumes:
+      - ./migrations:/migrations:ro
+    entrypoint:
+      - migrate
+      - -path
+      - /migrations
+      - -database
+      # Credentials and database name are read from PG* environment variables.
+      - "postgres://postgres:5432?sslmode=disable"
+    command: ["up"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+volumes:
+  postgres_data:
