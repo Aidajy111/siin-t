@@ -14,8 +14,6 @@ const (
 	PostgresKey = "postgres"
 )
 
-// Load reads and validates environment variables, then stores typed settings.
-// The returned Viper instance is configured once, before application startup.
 func Load() (*viper.Viper, error) {
 	v := viper.New()
 	v.AutomaticEnv()
